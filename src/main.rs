@@ -5,12 +5,24 @@ mod ekf {
     use na::{Matrix3, Matrix3x4, Matrix4, Matrix4x3, SVector, Vector3, Vector4, SMatrix};
 
     type Matrix7 = SMatrix<f32, 7, 7>;
+    type Matrix7x3 = SMatrix<f32, 7, 3>;
 
     trait BlockMatrix {
         fn from_four(m00: Matrix4<f32>, m01: SMatrix<f32, 4, 3>, m10: Matrix3x4<f32>, m11: Matrix3<f32>) -> Matrix7;
+        fn from_two(m0: SMatrix<f32, 4, 3>, m1: Matrix3<f32>) -> SMatrix<f32, 7, 3>;
     }
 
     impl BlockMatrix for SMatrix<f32, 7, 7> {
+        fn from_two(m0: SMatrix<f32, 4, 3>, m1: Matrix3<f32>) -> Matrix7x3 {
+            Matrix7x3::from_fn(|r, c|
+                match r {
+                    0..=3 => m0[(r, c)],
+                    4..=6 => m1[(r - 4, c)],
+                    _ => 4000.0
+                }
+            )
+        }
+
         fn from_four(m00: Matrix4<f32>, m01: SMatrix<f32, 4, 3>, m10: Matrix3x4<f32>, m11: Matrix3<f32>) -> Matrix7 {
             // Fix this code, especially default branch
             Matrix7::from_fn(|r, c|
@@ -39,11 +51,11 @@ mod ekf {
     }
 
     impl Filter {
-        pub fn quaternion(self) -> Vector4<f32> {
+        pub fn quaternion(&self) -> Vector4<f32> {
             Vector4::from(self.x.fixed_rows::<4>(0))
         }
 
-        fn quaternion_matrix(self) -> Matrix4x3<f32> {
+        fn quaternion_matrix(&self) -> Matrix4x3<f32> {
             let q = self.quaternion();
             Matrix4x3::new(
                 -q[1], -q[2], -q[3],
@@ -53,12 +65,16 @@ mod ekf {
             )
         }
 
-        pub fn predict(self, _w: Vector3<f32>, dt: f32) -> Matrix7 {
+        pub fn predict(&self, _w: Vector3<f32>, dt: f32) -> Matrix7x3 {
             let m00: Matrix4<f32> = Matrix4::identity();
             let m01 = (-dt / 2.0) * self.quaternion_matrix();
             let m10: Matrix3x4<f32> = Matrix3x4::zeros();
             let m11: Matrix3<f32> = Matrix3::identity();
-            Matrix7::from_four(m00, m01, m10, m11)
+            let _a = Matrix7::from_four(m00, m01, m10, m11);
+
+            let m0 = (dt / 2.0) * self.quaternion_matrix();
+            let m1: Matrix3<f32> = Matrix3::zeros();
+            Matrix7::from_two(m0, m1)
         }
     }
 
